@@ -10,6 +10,7 @@ import os
 import skimage.io
 import skimage.transform
 import numpy as np
+from sklearn.externals import joblib
 
 #pylint: disable=C0326
 
@@ -73,3 +74,39 @@ def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
         arr_3d_list.append( img_resized )
 
     return  np.array( arr_3d_list ), np.array( gt_list )
+
+
+def save_model( model_obj, model_name, model_type, verbose = 0 ) :
+
+    model_dir = "models/" + model_name
+    if not os.path.exists( model_dir ) :
+        os.mkdir( model_dir )
+
+    saved_dir = model_dir + "/saved/"
+    if not os.path.exists( saved_dir ) :
+        os.mkdir( saved_dir )
+
+    model_path = saved_dir + model_name  + '.pkl'
+
+    if verbose > 0 :
+        print("Saving model to:"  + model_path)
+
+    if model_type == 'sklearn'  :
+        joblib.dump( model_obj, model_path )
+    else :
+        raise NotImplementedError( "model_type=" + model_type)
+
+
+def load_model( model_name, model_type, verbose = 0 ) :
+
+
+
+    if model_type == 'sklearn' :
+        model_path = 'models/%s/saved/%s.pkl' % (model_name, model_name)
+        if verbose > 0 :
+            print(model_path)
+
+        model = joblib.load(  )
+        return model
+    else :
+        raise NotImplementedError
