@@ -38,7 +38,7 @@ def train_logistic( model_traits, data, logl=100 ) :
 
     return { "accuracy" : accu }
 
-def test_logistic( model_traits, data, logl=100 ) :
+def test_logistic( model_traits, data, logl=100, return_inferred=False ) :
     """Train a model by name on a set of images"""
     test_4d = data["test_4d"]
     test_gt = data["test_gt"]
@@ -54,4 +54,4 @@ def test_logistic( model_traits, data, logl=100 ) :
 
     log(logl, "%s", model_obj )
 
-    return accu
+    return accu if not return_inferred else  list(test_pred)

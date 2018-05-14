@@ -11,7 +11,8 @@ import logging
 
 import click
 from download import do_download
-from train import run_train, run_test
+from train_test import run_train, run_test, run_infer
+
 
 LOG = logging.getLogger( __name__ )
 LOG.setLevel( 1 )
@@ -55,7 +56,7 @@ def train( m, d, v ) :
 
     model_name = m
     images_dir = d
-    logl = 32  if v > 0 else 100
+    logl = 32  if v > 0 else 0
 
     log( logl, "Training model=%s on images of training dir=%s",
          model_name, images_dir )
@@ -75,17 +76,37 @@ def test( m, d, v ) :
 
     model_name = m
     images_dir = d
-    logl = 32 if v > 0 else 100
+    logl = 32 if v > 0 else 0
 
     log( logl, "Testing model=%s on images of training dir=%s",
          model_name, images_dir )
 
     run_test( model_name=m, images_dir=d, logl=logl )
 
+
+@click.command()
+@click.option( '-m', help='name of model')
+@click.option( '-d', help='directory holding  images')
+@click.option( '-v', default=0, help='verbosity level')
+#pylint: disable=C0103
+def infer( m, d, v ) :
+    """Run infer subcommand for model_name=m and images_dir=d"""
+    assert m, "Need to pass a model name with -m"
+    assert d, "Need to pass a dir name with -d"
+
+    model_name = m
+    images_dir = d
+    logl = 32 if v > 0 else 0
+
+    log( logl, "Infering with model=%s on images of training dir=%s",
+         model_name, images_dir )
+
+    run_infer( model_name=m, images_dir=d, logl=logl )
+
 cli.add_command( download )
 cli.add_command( train )
 cli.add_command( test )
-
+cli.add_command( infer )
 
 #%%
 

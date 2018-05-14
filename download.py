@@ -59,14 +59,15 @@ def do_download(  data_url, dest_dir,
 
 
     print('making train test dirs and distributing images in them')
-    make_train_test_dirs(  base_dir = dest_dir,
-                           orig_data_subdir = 'FullIJCNN2013',
-                           max_id=42,
-                           train_prop=0.8,
-                           seed=1337)
+    make_train_test_dirs( base_dir = dest_dir,
+                          orig_data_subdir = 'FullIJCNN2013',
+                          max_id=42,
+                          train_prop=0.8,
+                          seed=1337)
 
 
 def test() :
+    """Quick test"""
     #%%
     do_download(  data_url = None,
                   dest_dir = 'images/' ,

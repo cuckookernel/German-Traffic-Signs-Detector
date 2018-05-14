@@ -5,6 +5,8 @@ Created on Mon May 14 12:01:01 2018
 @author: mrestrepo
 @company: Yuxi Global (www.yuxiglobal.com)
 """
+
+#pylint: disable=C0326
 from itertools import product
 import os
 import json
@@ -60,13 +62,10 @@ def run_experiments() :
         data = {"train_x" :train_x,
                 "test_x"  :test_x,
                 "train_y" : train_gt,
-                "test_y"  : test_gt
-                }
+                "test_y"  : test_gt}
 
-        valid_accu_log, train_accu_log = train_lenet( data,  model_traits,
-                                                      verbose = 0 )
-
-
+        valid_accu_log, train_accu_log = train_lenet( model_traits, data,
+                                                      logl=100 )
         idx_v = int(np.argmax( valid_accu_log))
         idx_t = int(np.argmax( train_accu_log))
 
@@ -104,3 +103,11 @@ def collect_results( results_dir = "experiments" ) :
     results_df = pd.DataFrame( dics )
     #%%
     return results_df
+
+
+def test():
+    """Quick test"""
+    #%%
+    exps_df = collect_results( results_dir = "experiments2" )
+    #%%
+    return exps_df
