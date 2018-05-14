@@ -7,11 +7,15 @@ Created on Fri May 11 16:52:53 2018
 """
 
 #pylint: disable=C0326
+import logging
 
 import click
 from download import do_download
 from train import run_train, run_test
 
+LOG = logging.getLogger( __name__ )
+LOG.setLevel( 1 )
+log = LOG.log #pylint: disable=C0103
 #%%
 DATA_URL = "http://benchmark.ini.rub.de/Dataset_GTSDB/GTSDB_CppCode.zip"
 #DATA_URL="http://goldseek.com/news/GoldSeek/2007/6-4mb/7.JPG"
@@ -51,12 +55,12 @@ def train( m, d, v ) :
 
     model_name = m
     images_dir = d
+    logl = 32  if v > 0 else 100
 
-    if v > 0 :
-        print( "running training for model=%s on images of training dir=%s" %
-               (model_name, images_dir)  )
+    log( logl, "Training model=%s on images of training dir=%s",
+         model_name, images_dir )
 
-    run_train( model_name=m, images_dir=d, verbose=v  )
+    run_train( model_name=m, images_dir=d, logl=logl )
 
 
 @click.command()
@@ -71,12 +75,12 @@ def test( m, d, v ) :
 
     model_name = m
     images_dir = d
-    if v > 0 :
-        print( "running test of model=%s on images of training dir=%s" %
-               (model_name, images_dir) )
+    logl = 32 if v > 0 else 100
 
-    run_test( model_name=m, images_dir=d, verbose=v )
+    log( logl, "Testing model=%s on images of training dir=%s",
+         model_name, images_dir )
 
+    run_test( model_name=m, images_dir=d, logl=logl )
 
 cli.add_command( download )
 cli.add_command( train )

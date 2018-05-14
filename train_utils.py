@@ -7,12 +7,14 @@ Created on Sat May 12 09:35:32 2018
 """
 
 import os
+import logging
 import skimage.io
 import skimage.transform
 import numpy as np
 from sklearn.externals import joblib
 
 #pylint: disable=C0326
+log = logging.getLogger( __name__ ).log #pylint: disable=C0103
 
 def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
                     order=3, verbose=0, **kwargs ) :
@@ -63,21 +65,56 @@ def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
                               mode='reflect',
                               order=order, **kwargs )
 
-        imax = img_resized.max()
+
+        if rescale_mode == 'max' :
+            imax = img_resized.max()
+
+        elif rescale_mode == 'max_q' :
+            wi, he = target_size
+            imax = img_resized[ he//4: 3*he//4, wi//4 : 3*wi//4, : ].max()
+
+        elif rescale_mode == '' :
+            imax = 1.0
 
         assert imax <= 1.0,\
                "imax = %.3f : Using wrong version of skimage?" % imax
 
-        if rescale_mode == 'max' :
-            img_resized /= imax
+        img_resized /= imax
+        img_resized = np.clip( img_resized, 0.0, 1.0 )
 
         arr_3d_list.append( img_resized )
 
     return  np.array( arr_3d_list ), np.array( gt_list )
 
+def save_sklearn_model( model_obj, model_name, logl=100 ) :
+    """save a sklearn model to models/..."""
+    model_path = get_save_dir( model_name ) + "%s.pkl" % model_name
+    log(logl, "Saving model to: %s" , model_path)
 
-def save_model( model_obj, model_name, model_type, verbose = 0 ) :
+    joblib.dump( model_obj, model_path )
 
+
+def load_sklearn_model( model_name, logl=100 ) :
+    """loads a pickled sklearn model"""
+
+    model_path =get_save_dir( model_name ) + '%s.pkl' % model_name
+    log(logl, model_path )
+
+    model = joblib.load( model_path )
+    return model
+
+
+def save_tf_model( sess, model_name, logl=100 ) :
+    """save a tensorflow model to models/..."""
+    import tensorflow as tf
+    saver = tf.train.Saver()
+    model_path = get_save_dir( model_name )
+
+    log(logl, "Saving tensorflow model t: %s", model_path)
+    saver.save(sess, model_path )
+
+def get_save_dir( model_name ) :
+    """get a path under models"""
     model_dir = "models/" + model_name
     if not os.path.exists( model_dir ) :
         os.mkdir( model_dir )
@@ -86,27 +123,4 @@ def save_model( model_obj, model_name, model_type, verbose = 0 ) :
     if not os.path.exists( saved_dir ) :
         os.mkdir( saved_dir )
 
-    model_path = saved_dir + model_name  + '.pkl'
-
-    if verbose > 0 :
-        print("Saving model to:"  + model_path)
-
-    if model_type == 'sklearn'  :
-        joblib.dump( model_obj, model_path )
-    else :
-        raise NotImplementedError( "model_type=" + model_type)
-
-
-def load_model( model_name, model_type, verbose = 0 ) :
-
-
-
-    if model_type == 'sklearn' :
-        model_path = 'models/%s/saved/%s.pkl' % (model_name, model_name)
-        if verbose > 0 :
-            print(model_path)
-
-        model = joblib.load(  )
-        return model
-    else :
-        raise NotImplementedError
+    return saved_dir
