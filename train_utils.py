@@ -113,7 +113,7 @@ def save_tf_model( sess, model_name, logl=100 ) :
     log(logl, "Saving tensorflow model t: %s", model_path)
     saver.save(sess, model_path )
 
-def get_save_dir( model_name ) :
+def get_save_dir( model_name, create=True) :
     """get a path under models"""
     model_dir = "models/" + model_name
     if not os.path.exists( model_dir ) :
@@ -121,6 +121,9 @@ def get_save_dir( model_name ) :
 
     saved_dir = model_dir + "/saved/"
     if not os.path.exists( saved_dir ) :
-        os.mkdir( saved_dir )
+        if create :
+            os.mkdir( saved_dir )
+        else :
+            assert False, "Path doesn't exist: " + saved_dir
 
     return saved_dir

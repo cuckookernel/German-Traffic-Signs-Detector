@@ -16,18 +16,25 @@ LOG=logging.getLogger(__name__)
 LOG.setLevel( 1 )
 log = LOG.log  #pylint: disable=C0103
 
-def run_train( model_name, images_dir, logl=100) :
+def run_train( model_name, images_dir, valid_images_dir=None, logl=100) :
     """Train a model by name on a set of images"""
     #%%
-    target_size = (32,32)
+    model_traits = MODEL_TRAITS[model_name]
+    target_size = model_traits["target_size"]
     train_4d, train_gt = tu.make_4d_arrays(images_dir=images_dir,
                                            target_size=target_size)
 
     log(logl, "train_4d has shape = %s", (train_4d.shape,) )
 
-    model_traits = MODEL_TRAITS[model_name]
+
     train_fun  = model_traits["train_fun"]
     data = { "train_4d" : train_4d, "train_gt" : train_gt }
+
+    if valid_images_dir is not None :
+        test_4d, test_gt = tu.make_4d_arrays(images_dir=valid_images_dir,
+                                             target_size=target_size)
+        data["test_4d"] = test_4d
+        data["test_gt"] = test_gt
 
     train_res = train_fun( model_traits, data, logl=logl -1 )
 

@@ -22,9 +22,35 @@ MODEL_TRAITS = [
       "target_size" : (32,32),
       "rescale_mode" : "",
       "batch_size" : 100,
+      "net_version" : "v1",
       "learning_rate" : 0.0003,
-      "drop_out_rate" : 0.2,
+      "dropout_rate" : 0.25,
       "epochs" : 61 },
+
+    { "model_name" : "model2v2",
+      "train_fun" : tf_lenet.train_lenet,
+      "test_fun"  : tf_lenet.test_lenet,
+      "target_size" : (32,32),
+      "rescale_mode" : "",
+      "batch_size" : 100,
+      "net_version" : "v2",
+      "drop_colors" : 1,
+      "learning_rate" : 0.0005,
+      "dropout_rate" : 0.3,
+      "epochs" : 500 },
+
+      { "model_name" : "model3",
+      "train_fun" : tf_lenet.train_lenet,
+      "test_fun"  : tf_lenet.test_lenet,
+      "target_size" : (32,32),
+      "rescale_mode" : "max_q",
+      "batch_size" : 50,
+      "net_version" : "v2",
+      "drop_colors" : 1,
+      "learning_rate" : 0.0001,
+      "dropout_rate" : 0.1,
+      "epochs" : 300 },
+
 
     { "model_name" : "model2b",
       "train_fun" : tf_lenet.train_lenet,
@@ -32,8 +58,8 @@ MODEL_TRAITS = [
       "target_size" : (32,32),
       "rescale_mode" : "",
       "batch_size" : 50,
-      "learning_rate" : 0.0003,
-      "drop_out_rate" : 0.3,
+      "learning_rate" : 0.0005,
+      "dropout_rate" : 0.3,
       "epochs" : 3 }
 ]
 

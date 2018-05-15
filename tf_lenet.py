@@ -25,10 +25,7 @@ def train_lenet( model_traits, data, logl=0, save_model=True ):
     batch_size = model_traits["batch_size"]
     epochs     = model_traits["epochs"]
 
-    build_lenet_graph( model_traits["target_size"],
-                       drop_out_rate=model_traits["drop_out_rate"],
-                       num_classes=42,
-                       learning_rate=model_traits["learning_rate"] )
+    build_lenet_graph( model_traits, num_classes=42, mode='train')
     #%%
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -63,18 +60,15 @@ def test_lenet( model_traits, data, return_inferred=False, logl=0 ):
 
     batch_size = model_traits["batch_size"]
 
-    build_lenet_graph( model_traits["target_size"],
-                       drop_out_rate=model_traits["drop_out_rate"],
-                       num_classes=42,
-                       learning_rate=model_traits["learning_rate"],
-                       mode=tf.estimator.ModeKeys.EVAL )
+    build_lenet_graph( model_traits, num_classes=42, mode='eval' )
 
     saver = tf.train.Saver()
     with tf.Session() as sess:
         #sess.run(tf.global_variables_initializer())
 
         log( logl, "Testing...\n")
-        saver.restore(sess, tu.get_save_dir(model_traits["model_name"]) )
+        saver.restore(sess, tu.get_save_dir(model_traits["model_name"],
+                                            create=False) )
 
         result = tf_evaluate( data["test_4d"], data["test_gt"], batch_size,
                               return_inferred=return_inferred )
@@ -93,7 +87,7 @@ def run_one_epoch( sess, batch_size, data) :
     train_y = data["train_gt"]
 
     do_valid = "test_4d" in data
-    print( "do_valid", do_valid, list(data.keys()) )
+    #print( "do_valid", do_valid, list(data.keys()) )
 
     for offset in range(0, len(train_x), batch_size):
         end = offset + batch_size
@@ -103,7 +97,7 @@ def run_one_epoch( sess, batch_size, data) :
                                         target   : batch_y})
 
     if do_valid :
-        valid_accu = tf_evaluate( data["test_4d"], data["test_y"], batch_size )
+        valid_accu = tf_evaluate( data["test_4d"], data["test_gt"], batch_size)
     else :
         valid_accu = float("nan")
 
@@ -126,21 +120,19 @@ def tf_op(name) :
     return tf.get_default_graph().get_operation_by_name( name )
 
 
-def build_lenet_graph( target_size, drop_out_rate,
-                       num_classes = 42,
-                       learning_rate=0.001,
-                       mode='train' ) :
+def build_lenet_graph( model_traits, num_classes, mode ) :
     """Builds LeNet Neural network"""
 
     import tensorflow as tf
-    from tensorflow.contrib.layers import flatten
 
-    mean = 0
-    sigma = 0.1
-    num_classes = 42 # used in last layer
+    params = model_traits.copy()
+    params.update( {"mean" :0.0,
+                    "sigma" : 0.1,
+                    "num_classes" : num_classes,
+                    "mode" : mode })
 
     tf.reset_default_graph()
-    img_width, img_height = target_size
+    img_width, img_height = model_traits["target_size"]
 
     images_in = tf.placeholder( dtype=tf.float32,
                                 shape=(None, img_width, img_height, 3),
@@ -150,73 +142,158 @@ def build_lenet_graph( target_size, drop_out_rate,
 
     one_hot_y = tf.one_hot(target, num_classes)
 
-    conv1_w = tf.Variable(tf.truncated_normal(shape = [5,5,3,6],
-                                              mean = mean, stddev = sigma))
-    conv1_b = tf.Variable(tf.zeros(6))
+    pool_1 = layer_c1( tf, images_in, params )
+    pool_2 = layer_c2( tf, pool_1, params )
+    fc2 = fully_connected( tf, pool_2, params )
+
+    if model_traits["net_version"] == "v1" :
+        logits, cross_entropy = fc3_v1( tf, fc2, one_hot_y, params)
+    elif   model_traits["net_version"] == "v2" :
+        logits, cross_entropy = fc3_v2( tf, fc2, one_hot_y, params)
+    else :
+        raise NotImplementedError("invalid version: " +  model_traits["net_version"])
+    compute_accuracy( tf, cross_entropy, one_hot_y, logits, params )
+
+
+def layer_c1( tf, images_in, params ) : #pylint: disable=C0103
+    """Convolutional layer C1 + pooling"""
+    if params["drop_colors"] :
+        images_in = tf.reduce_mean( images_in, axis = 3, keepdims=True )
+
+        conv1_w = tf.Variable(tf.truncated_normal(shape  = [5,5,1,6],
+                                                  mean   = params["mean"],
+                                                  stddev = params["sigma"]))
+        conv1_b = tf.Variable(tf.zeros(6))
+
+    else :
+        conv1_w = tf.Variable(tf.truncated_normal(shape  = [5,5,3,6],
+                                                  mean   = params["mean"],
+                                                  stddev = params["sigma"]))
+        conv1_b = tf.Variable(tf.zeros(6))
 
     conv1 = tf.nn.conv2d(images_in, conv1_w, strides = [1,1,1,1],
                          padding = 'VALID') + conv1_b
     # Activation.
-    conv1 = tf.nn.relu(conv1)
+    if params["net_version"] == "v1" :
+        conv1 = tf.nn.relu(conv1)
+    elif params["net_version"] == "v2" :
+        conv1 = 1.7159 * tf.tanh( conv1 )
 
     pool_1 = tf.nn.max_pool(conv1, ksize = [1,2,2,1], strides = [1,2,2,1],
                             padding = 'VALID')
+    return pool_1
 
+def layer_c2( tf, pool_1, params ) : #pylint: disable=C0103
+    """Convolutional layer C1 + pooling"""
     # TLayer 2: Convolutional. Output = 10x10x16.
-    conv2_w = tf.Variable(tf.truncated_normal(shape = [5,5,6,16],
-                                              mean=mean, stddev = sigma))
+    conv2_w = tf.Variable(tf.truncated_normal(shape  = [5,5,6,16],
+                                              mean   = params["mean"],
+                                              stddev = params["sigma"]))
     conv2_b = tf.Variable(tf.zeros(16))
 
     conv2 = tf.nn.conv2d(pool_1, conv2_w, strides = [1,1,1,1],
                          padding = 'VALID') + conv2_b
     # Activation.
-    conv2 = tf.nn.relu(conv2)
+    if params["net_version"] == "v1" :
+        conv2 = tf.nn.relu(conv2)
+    elif params["net_version"] == "v2" :
+        conv2 = 1.7159 * tf.tanh( conv2 )
 
     pool_2 = tf.nn.max_pool(conv2, ksize = [1,2,2,1], strides = [1,2,2,1],
                             padding = 'VALID')
 
+    return pool_2
     # Flatten. Input = 5x5x16. Output = 400.
+
+def fully_connected( tf, pool_2, params ) : #pylint: disable=C0103
+    """Fully connected layers FC1, FC2"""
+    from tensorflow.contrib.layers import flatten
+
     fc1 = flatten( pool_2 )
-
-
     #  Layer 3: Fully Connected. Input = 400. Output = 120.
-    fc1_w = tf.Variable(tf.truncated_normal(shape = (400,120),
-                                            mean = mean, stddev = sigma))
+    fc1_w = tf.Variable(tf.truncated_normal(shape = (400, 120),
+                                            mean = params["mean"],
+                                            stddev = params["sigma"]))
     fc1_b = tf.Variable(tf.zeros(120))
     fc1 = tf.matmul(fc1,fc1_w) + fc1_b
 
     # Activation.
-    fc1 = tf.nn.relu(fc1)
+    if params["net_version"] == "v1" :
+        fc1 = tf.nn.relu(fc1)
+    elif params["net_version"] == "v2" :
+        fc1 = 1.7159 * tf.tanh( fc1 )
 
     fc1_do = tf.layers.dropout( inputs=fc1,
-                                rate= drop_out_rate,
-                                training= mode == tf.estimator.ModeKeys.TRAIN )
+                                rate= params["dropout_rate"],
+                                training= params["mode"] == 'train' )
 
     #  Layer 4: Fully Connected. Input = 120. Output = 84.
-    fc2_w = tf.Variable(tf.truncated_normal(shape = (120,84),
-                                            mean = mean, stddev = sigma))
+    fc2_w = tf.Variable(tf.truncated_normal(shape  = (120,84),
+                                            mean   = params["mean"],
+                                            stddev = params["sigma"] ))
     fc2_b = tf.Variable(tf.zeros(84))
     fc2 = tf.matmul(fc1_do,fc2_w) + fc2_b
     # Activation.
-    fc2 = tf.nn.relu(fc2)
+    #fc2 = tf.nn.relu(fc2, name="fc2")
+
+
+    # Activation.
+    if params["net_version"] == "v1" :
+        fc2 = tf.nn.relu(fc2)
+    elif params["net_version"] == "v2" :
+        fc2 = 1.7159 * tf.tanh( fc2 )
+
+    return fc2
+
+def fc3_v1( tf, fc2, one_hot_y, params ) : #pylint: disable=C0103
+    """Final layer"""
 
     # Layer 5: Fully Connected. Input = 84. Output = 10.
-    fc3_w = tf.Variable(tf.truncated_normal(shape = (84, num_classes),
-                                            mean = mean , stddev = sigma))
-    fc3_b = tf.Variable(tf.zeros(num_classes))
-    logits = tf.matmul(fc2, fc3_w) + fc3_b
+    fc3_w = tf.Variable(tf.truncated_normal(shape = (84, params["num_classes"]),
+                                            mean = params["mean"] ,
+                                            stddev = params["sigma"]),
+                        name="fc3_w")
 
-    cross_entropy  = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
-                                                                labels=one_hot_y)
+    fc3_b = tf.Variable(tf.zeros(params["num_classes"]))
+    logits = tf.add( tf.matmul(fc2, fc3_w) , fc3_b, name="logits")
+    cross_ent = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
+                                                           labels= tf.stop_gradient(one_hot_y) )
+
+    return logits, cross_ent
+
+def fc3_v2( tf, fc2, one_hot_y, params ) : #pylint: disable=C0103
+    """Final layer"""
+
+    ncls = params["num_classes"]
+    # Layer 5: Fully Connected. Input = 84. Output = 10.
+    fc3_w = tf.Variable(tf.truncated_normal(shape = (84, ncls ),
+                                            mean = params["mean"] ,
+                                            stddev = params["sigma"]),
+                        name="fc3_w")
+
+    fc2_mat = tf.reshape( fc2, [-1, 84, 1] )
+    #print( "fc2=", fc2)
+    #print( "fc2_mat=", fc2_mat)
+    #print( "fc3_w=", fc3_w)
+    #ones = tf.ones( [nc])
+    logits = - tf.reduce_sum( tf.square(fc2_mat - fc3_w ), axis=1)
+    #print( "logits=", logits)
+    #tf.nn.softmax()
+    cross_ent = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
+                                                           labels=tf.stop_gradient(one_hot_y))
+
+    return logits, cross_ent
+
+
+def compute_accuracy( tf, cross_entropy, one_hot_y, logits, params ) : #pylint: disable=C0103
+    """Accuracy"""
+
     loss_operation = tf.reduce_mean(cross_entropy)
-    optimizer = tf.train.AdamOptimizer(learning_rate = learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate = params["learning_rate"])
     optimizer.minimize( loss_operation, name="train_op" )
 
     correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(one_hot_y, 1))
     tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accu" )
-
-    return {"target" : target }
-
 
 def tf_evaluate(x_data0, y_data, batch_size, return_inferred=False):
     """Evaluate accuracy in tf.session"""
@@ -251,6 +328,7 @@ def testing() :
     """Quick interctive tests"""
     #%%
     from model_traits import MODEL_TRAITS
+    #%%
 
     images_dir = "images/train"
     target_size = (32,32)
@@ -267,6 +345,9 @@ def testing() :
              "test_4d" : test_4d, "test_gt" : test_gt}
 
     train_results = train_lenet( MODEL_TRAITS["model2"], data, logl = 1 )
+    #%%
+    model_traits = MODEL_TRAITS["model2"]
+    build_lenet_graph( model_traits, num_classes=42, mode='train' )
     #%%
     # accu = train_logistic( train_4d, train_gt, verbose=1 )
     #%%

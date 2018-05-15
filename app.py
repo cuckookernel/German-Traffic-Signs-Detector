@@ -47,9 +47,11 @@ def download( data_url, skip_download=False, remove_zip_after=True ) :
 @click.command()
 @click.option( '-m', help='name of model to train')
 @click.option( '-d', help='directory holding training images')
+
 @click.option( '-v', default=0, help='verbosity level')
+@click.option( '--vid', default=None )
 #pylint: disable=C0103
-def train( m, d, v ) :
+def train( m, d, v, vid ) :
     """Run train subcommand for model_name=m and images_dir=d"""
     assert m, "Need to pass a model name with -m"
     assert d, "Need to pass a dir name with -d"
@@ -61,7 +63,7 @@ def train( m, d, v ) :
     log( logl, "Training model=%s on images of training dir=%s",
          model_name, images_dir )
 
-    run_train( model_name=m, images_dir=d, logl=logl )
+    run_train( model_name=m, images_dir=d, valid_images_dir=vid, logl=logl )
 
 
 @click.command()
