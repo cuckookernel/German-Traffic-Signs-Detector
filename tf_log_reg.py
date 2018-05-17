@@ -4,6 +4,8 @@ Created on Wed May 16 23:19:22 2018
 
 @author: Mateo
 """
+#pylint: disable=C0326
+
 import train_utils as tu
 
 
@@ -27,61 +29,60 @@ def build_log_reg( model_traits, num_classes, mode ) :
     import tensorflow as tf
 
     #%%
-    #params = model_traits.copy()
-    params =  {"mean" :0.0,
+    params = model_traits.copy()
+    params.update({ "mean" :0.0,
                     "sigma" : 0.1,
                     "num_classes" : num_classes,
-                    "mode" : mode }
+                    "mode" : mode } )
 
     tf.reset_default_graph()
     img_width, img_height = model_traits["target_size"]
     total_dim = img_width * img_height
 
-    gray_scale_flat = tf_log_reg_layer0( img_width, img_height )
+    gray_scale_flat = tf_log_reg_layer0( tf, img_width, img_height )
     logits = tf_log_reg_layer1(tf,  gray_scale_flat, total_dim, params)
-    tf_log_reg_final( logits )
+    tf_log_reg_final( tf, logits, params )
 
 
-def tf_log_reg_layer0( tf, img_width, img_height ) :
-    #%%
+def tf_log_reg_layer0( tsf, img_width, img_height ) :
+    """Input layer plus conversion to gray-scale and flattening
+    of matrices into vectors"""
+
     from tensorflow.contrib.layers import flatten
-    images_in = tf.placeholder( dtype=tf.float32,
-                                shape=(None, img_width, img_height, 3),
-                                name="images_in" )
+    images_in = tsf.placeholder( dtype=tsf.float32,
+                                 shape=(None, img_width, img_height, 3),
+                                 name="images_in" )
 
-    gray_scale = tf.reduce_mean( images_in, axis = 3, keepdims=True )
+    gray_scale = tsf.reduce_mean( images_in, axis = 3, keepdims=True )
 
     gray_scale_flat = flatten( gray_scale )
     #%%
 
     return gray_scale_flat
 
-def tf_log_reg_layer1( tf, gray_scale_flat,  total_dim,params ) :
+def tf_log_reg_layer1( tsf, gray_scale_flat,  total_dim,params ) :
+    """compute logits as logits = x . W  + b with W and b being the
+    learnable parameters"""
 
-    num_classes=params["num_classes"]
+    num_classes = params["num_classes"]
 
-    W = tf.Variable(tf.truncated_normal(shape = (total_dim, num_classes),
-                                        mean = params["mean"],
-                                        stddev = params["sigma"]))
-    b = tf.Variable(tf.zeros(num_classes))
+    mat_w = tsf.Variable(tsf.truncated_normal(shape = (total_dim, num_classes),
+                                              mean = params["mean"],
+                                              stddev = params["sigma"]))
+    vec_b = tsf.Variable(tsf.zeros(num_classes))
 
-    logits = tf.matmul( gray_scale_flat, W ) + b
+    logits = tsf.matmul( gray_scale_flat, mat_w ) + vec_b
 
     return logits
 
-def tf_log_reg_final( tf, logits, params ) :
+def tf_log_reg_final( tsf, logits, params ) :
+    """Compute cross_entropy (to be optimized) and accuracy, for reporting """
     #%%
-    target = tf.placeholder( tf.int32, (None),  name="target" )
+    target = tsf.placeholder( tsf.int32, (None),  name="target" )
 
-    one_hot_y = tf.one_hot(target, params["num_classes"])
-    cross_ent = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
-                                                           labels=tf.stop_gradient(one_hot_y))
+    one_hot_y = tsf.one_hot(target, params["num_classes"])
+    cross_ent = tsf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
+                                                            labels=tsf.stop_gradient(one_hot_y))
 
-    tu.compute_accuracy( tf, cross_ent, one_hot_y, logits, params )
-    #%%
-
-def test_build_log_reg() :
-    #%%
-    from  model_traits import MODEL_TRAITS
-
+    tu.compute_accuracy( tsf, cross_ent, one_hot_y, logits, params )
     #%%
