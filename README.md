@@ -2,6 +2,8 @@
 
 This repository includes the following parts: 
 
+1. **requirements.txt** which can be used with pip to install the required libraries, most of them are pretty standard, except perhaps for `pyglet` which is only used for the GUI functionality required by 
+
 1. **app.py**: is the main python script that contains the application. 
    We have implemented the following subcommands: 
     
@@ -19,4 +21,11 @@ This repository includes the following parts:
  5. **tf_lenet.py**: Has the code for training and testing tensorflow (tf) version of LeNet, included the network construction.
  
  6. **train_utils.py** Contains some common low-level utilities used through out. 
+ 
+ 
+ ## Models trained 
+ 
+ 1. Model 1:  Basic Logistic regression Classifier with L2 regularization built on top of Scikit-Learn.
+ 2. Model 2:  Logistic regression Classifier built on top  of tensorflow with drop-out regularization 
+ 3. Model 3:  LeNet implementation built on top of tensorflow with drop-out regularization
  
