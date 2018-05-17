@@ -17,6 +17,29 @@ log = LOGGER.log #pylint: disable=C0103
 
 def train_lenet( model_traits, data, logl=0, save_model=True ):
     """Train a lenet type NN for image classification"""
+    return train_tf( model_traits, data, 
+                     build_graph=build_lenet_graph, 
+                     logl=logl, 
+                     save_model=save_model ) 
+    
+
+def test_lenet(  model_traits, data, return_inferred=False, logl=0 ):
+    """Test a LeNet type NN for image classification"""
+    return test_tf( model_traits, data, 
+                     build_graph=build_lenet_graph, 
+                     return_inferred=return_inferred,
+                     logl=logl ) 
+    
+    
+def train_log_reg( model_traits, data, logl=0, save_model=True ):
+    """Train a lenet type NN for image classification"""
+    return train_tf( model_traits, data, 
+                     build_graph=build_log_reg, 
+                     logl=logl, 
+                     save_model=save_model ) 
+
+def train_tf( model_traits, data, build_graph, logl=0, save_model=True ) :
+    """Generic function for traing a tf-based model"""
 
     log( logl, "train_lenet : importing tensorflow" )
     import tensorflow as tf
@@ -25,7 +48,7 @@ def train_lenet( model_traits, data, logl=0, save_model=True ):
     batch_size = model_traits["batch_size"]
     epochs     = model_traits["epochs"]
 
-    build_lenet_graph( model_traits, num_classes=42, mode='train')
+    build_graph( model_traits, num_classes=42, mode='train')
     #%%
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -51,16 +74,15 @@ def train_lenet( model_traits, data, logl=0, save_model=True ):
     return { "accuracy" : train_accu_log[-1] }
 
 
-def test_lenet( model_traits, data, return_inferred=False, logl=0 ):
-    """Train a lenet type NN for image classification"""
+def test_tf( model_traits, data, build_graph, return_inferred=False, logl=0 ):
+    """Generic function for testing a tf-based model"""
 
     log(logl, "test_lenet : importing tensorflow" )
     import tensorflow as tf
 
-
     batch_size = model_traits["batch_size"]
 
-    build_lenet_graph( model_traits, num_classes=42, mode='eval' )
+    build_graph( model_traits, num_classes=42, mode='eval' )
 
     saver = tf.train.Saver()
     with tf.Session() as sess:
@@ -105,7 +127,6 @@ def run_one_epoch( sess, batch_size, data) :
 
     return valid_accu, train_accu
 
-
 def tf_node(name) :
     """Get a node (tensor) in the graph by name.
     The name is usually <name>:<idx>"""
@@ -120,11 +141,76 @@ def tf_op(name) :
     return tf.get_default_graph().get_operation_by_name( name )
 
 
+def build_log_reg( model_traits, num_classes, mode ) :
+    """Builds LeNet Neural network"""
+    #%%
+    import tensorflow as tf
+    
+    #%%
+    #params = model_traits.copy()
+    params =  {"mean" :0.0,
+                    "sigma" : 0.1,
+                    "num_classes" : num_classes,
+                    "mode" : mode }
+
+    tf.reset_default_graph()
+    img_width, img_height = model_traits["target_size"]
+    total_dim = img_width * img_height
+    
+    gray_scale_flat = tf_log_reg_layer0( img_width, img_height )
+    logits = tf_log_reg_layer1(tf,  gray_scale_flat, total_dim, params)
+    tf_log_reg_final( logits )
+    
+    
+def tf_log_reg_layer0( tf, img_width, img_height ) : 
+    #%%
+    from tensorflow.contrib.layers import flatten
+    images_in = tf.placeholder( dtype=tf.float32,
+                                shape=(None, img_width, img_height, 3),
+                                name="images_in" )
+        
+    gray_scale = tf.reduce_mean( images_in, axis = 3, keepdims=True )
+    
+    gray_scale_flat = flatten( gray_scale )
+    #%%
+    
+    return gray_scale_flat
+    
+def tf_log_reg_layer1( tf, gray_scale_flat,  total_dim,params ) :
+
+    num_classes=params["num_classes"]
+    
+    W = tf.Variable(tf.truncated_normal(shape = (total_dim, num_classes),
+                                        mean = params["mean"],
+                                        stddev = params["sigma"]))
+    b = tf.Variable(tf.zeros(num_classes))
+
+    logits = tf.matmul( gray_scale_flat, W ) + b 
+    
+    return logits
+       
+def tf_log_reg_final( tf, logits, params ) :
+    #%%
+    target = tf.placeholder( tf.int32, (None),  name="target" )
+
+    one_hot_y = tf.one_hot(target, params["num_classes"])
+    cross_ent = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
+                                                           labels=tf.stop_gradient(one_hot_y))
+
+    compute_accuracy( tf, cross_ent, one_hot_y, logits, params )
+    #%%
+    
+def test_build_log_reg() :
+    #%%
+    from  model_traits import MODEL_TRAITS    
+    
+    #%%
+
 def build_lenet_graph( model_traits, num_classes, mode ) :
     """Builds LeNet Neural network"""
 
     import tensorflow as tf
-
+    
     params = model_traits.copy()
     params.update( {"mean" :0.0,
                     "sigma" : 0.1,
@@ -149,7 +235,7 @@ def build_lenet_graph( model_traits, num_classes, mode ) :
     if model_traits["net_version"] == "v1" :
         logits, cross_entropy = fc3_v1( tf, fc2, one_hot_y, params)
     elif   model_traits["net_version"] == "v2" :
-        logits, cross_entropy = fc3_v2( tf, fc2, one_hot_y, params)
+        logits, cross_entropy = fc3_orig( tf, fc2, one_hot_y, params)
     else :
         raise NotImplementedError("invalid version: " +  model_traits["net_version"])
     compute_accuracy( tf, cross_entropy, one_hot_y, logits, params )
@@ -232,7 +318,7 @@ def fully_connected( tf, pool_2, params ) : #pylint: disable=C0103
                                             mean   = params["mean"],
                                             stddev = params["sigma"] ))
     fc2_b = tf.Variable(tf.zeros(84))
-    fc2 = tf.matmul(fc1_do,fc2_w) + fc2_b
+    fc2 = tf.matmul(fc1_do, fc2_w) + fc2_b
     # Activation.
     #fc2 = tf.nn.relu(fc2, name="fc2")
 
@@ -241,9 +327,35 @@ def fully_connected( tf, pool_2, params ) : #pylint: disable=C0103
     if params["net_version"] == "v1" :
         fc2 = tf.nn.relu(fc2)
     elif params["net_version"] == "v2" :
-        fc2 = 1.7159 * tf.tanh( fc2 )
+        fc2 = 1.7159 * tf.tanh( fc2 ) # See LeCun paper
 
     return fc2
+
+
+
+def fc3_orig( tf, fc2, one_hot_y, params ) : #pylint: disable=C0103
+    """Final layer with Gaussian connections following original paper"""
+
+    ncls = params["num_classes"]
+    # Layer 5: Fully Connected. Input = 84. Output = 10.
+    fc3_w = tf.Variable(tf.truncated_normal(shape = (84, ncls ),
+                                            mean = params["mean"] ,
+                                            stddev = params["sigma"]),
+                        name="fc3_w")
+
+    ## Gaussian connections!
+    fc2_mat = tf.reshape( fc2, [-1, 84, 1] )
+    #print( "fc2=", fc2)
+    #print( "fc2_mat=", fc2_mat)
+    #print( "fc3_w=", fc3_w)
+    #ones = tf.ones( [nc])
+    logits = - tf.reduce_sum( tf.square(fc2_mat - fc3_w ), axis=1)
+    #print( "logits=", logits)
+    #tf.nn.softmax()
+    cross_ent = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
+                                                           labels=tf.stop_gradient(one_hot_y))
+
+    return logits, cross_ent
 
 def fc3_v1( tf, fc2, one_hot_y, params ) : #pylint: disable=C0103
     """Final layer"""
@@ -260,30 +372,6 @@ def fc3_v1( tf, fc2, one_hot_y, params ) : #pylint: disable=C0103
                                                            labels= tf.stop_gradient(one_hot_y) )
 
     return logits, cross_ent
-
-def fc3_v2( tf, fc2, one_hot_y, params ) : #pylint: disable=C0103
-    """Final layer"""
-
-    ncls = params["num_classes"]
-    # Layer 5: Fully Connected. Input = 84. Output = 10.
-    fc3_w = tf.Variable(tf.truncated_normal(shape = (84, ncls ),
-                                            mean = params["mean"] ,
-                                            stddev = params["sigma"]),
-                        name="fc3_w")
-
-    fc2_mat = tf.reshape( fc2, [-1, 84, 1] )
-    #print( "fc2=", fc2)
-    #print( "fc2_mat=", fc2_mat)
-    #print( "fc3_w=", fc3_w)
-    #ones = tf.ones( [nc])
-    logits = - tf.reduce_sum( tf.square(fc2_mat - fc3_w ), axis=1)
-    #print( "logits=", logits)
-    #tf.nn.softmax()
-    cross_ent = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
-                                                           labels=tf.stop_gradient(one_hot_y))
-
-    return logits, cross_ent
-
 
 def compute_accuracy( tf, cross_entropy, one_hot_y, logits, params ) : #pylint: disable=C0103
     """Accuracy"""
