@@ -15,19 +15,8 @@ MODEL_TRAITS = [
     { "model_name" : "model1",
       "train_fun" : skl_logistic.train_logistic,
       "test_fun"  : skl_logistic.test_logistic },
-
-    { "model_name" : "model2",
-      "train_fun" : tf_lenet.train_lenet,
-      "test_fun"  : tf_lenet.test_lenet,
-      "target_size" : (32,32),
-      "rescale_mode" : "",
-      "batch_size" : 100,
-      "net_version" : "v1",
-      "learning_rate" : 0.0003,
-      "dropout_rate" : 0.25,
-      "epochs" : 61 },
-
-    { "model_name" : "model2v2",
+    
+    { "model_name" : "model3",
       "train_fun" : tf_lenet.train_lenet,
       "test_fun"  : tf_lenet.test_lenet,
       "target_size" : (32,32),
@@ -37,9 +26,22 @@ MODEL_TRAITS = [
       "drop_colors" : 1,
       "learning_rate" : 0.0005,
       "dropout_rate" : 0.3,
-      "epochs" : 500 },
+      "epochs" : 300 },
+      
+      { "model_name" : "model3v1",
+      "train_fun" : tf_lenet.train_lenet,
+      "test_fun"  : tf_lenet.test_lenet,
+      "target_size" : (32,32),
+      "rescale_mode" : "",
+      "batch_size" : 100,
+      "net_version" : "v1",
+      "drop_colors" : 0, 
+      "learning_rate" : 0.0003,
+      "dropout_rate" : 0.25,
+      "epochs" : 61 },
 
-      { "model_name" : "model3",
+
+      { "model_name" : "model4",
       "train_fun" : tf_lenet.train_lenet,
       "test_fun"  : tf_lenet.test_lenet,
       "target_size" : (32,32),
@@ -52,7 +54,7 @@ MODEL_TRAITS = [
       "epochs" : 300 },
 
 
-    { "model_name" : "model2b",
+    { "model_name" : "model3b",
       "train_fun" : tf_lenet.train_lenet,
       "test_fun"  : tf_lenet.test_lenet,
       "target_size" : (32,32),

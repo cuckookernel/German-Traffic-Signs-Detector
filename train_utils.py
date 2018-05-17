@@ -14,6 +14,7 @@ import numpy as np
 from sklearn.externals import joblib
 
 #pylint: disable=C0326
+
 log = logging.getLogger( __name__ ).log #pylint: disable=C0103
 
 def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
@@ -46,48 +47,66 @@ def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
     arr_3d_list = []
     gt_list = []
 
-    resize = skimage.transform.resize
 
     for i, img_fn in enumerate( os.listdir( images_dir ) ) :
+
         if img_fn.startswith( '.') :
             continue
 
         if i % 20 == 0 and verbose > 0 :
             print( "resizing img %i" % i )
 
-        img = skimage.io.imread( images_dir + '/' + img_fn )
+        image_path = images_dir + '/' + img_fn
+        img_resized, class_ = resize_one( image_path, rescale_mode,
+                                          target_size, order, **kwargs )
 
-        # Extract the ground truth label as an int
-        fn_pieces = img_fn.split('.')[0].split('_')
-        assert len(fn_pieces) == 2, \
-        "img_fn=%s does not have the format <something>_<ground_truth>.<ext>"
-
-        gt_list.append( int( fn_pieces[1] ) )
-
-        img_resized = resize( img, target_size,
-                              mode='reflect',
-                              order=order, **kwargs )
-
-
-        if rescale_mode == 'max' :
-            imax = img_resized.max()
-
-        elif rescale_mode == 'max_q' :
-            wi, he = target_size
-            imax = img_resized[ he//4: 3*he//4, wi//4 : 3*wi//4, : ].max()
-
-        elif rescale_mode == '' :
-            imax = 1.0
-
-        assert imax <= 1.0,\
-               "imax = %.3f : Using wrong version of skimage?" % imax
-
-        img_resized /= imax
-        img_resized = np.clip( img_resized, 0.0, 1.0 )
-
+        gt_list.append( class_ )
         arr_3d_list.append( img_resized )
 
+
     return  np.array( arr_3d_list ), np.array( gt_list )
+
+
+def resize_one( image_path, rescale_mode, target_size, order, **kwargs ) :
+    """Load an image from a path, resize it and return it as
+    a np.array along with its class_ extracted from filename """
+
+    resize = skimage.transform.resize
+
+    img = skimage.io.imread( image_path )
+
+    # Extract the ground truth label as an int
+    fn_pieces = os.path.basename( image_path ).split('.')[0].split('_')
+
+    assert len(fn_pieces) == 2, \
+    "img_fn=%s does not have the format <something>_<ground_truth>.<ext>"
+
+    img_resized = resize( img, target_size,
+                          mode='reflect',
+                          order=order, **kwargs )
+
+
+    if rescale_mode == 'max' :
+        imax = img_resized.max()
+
+    elif rescale_mode == 'max_q' :
+        wi, he = target_size
+        imax = img_resized[ he//4: 3*he//4, wi//4 : 3*wi//4, : ].max()
+
+    elif rescale_mode == '' :
+        imax = 1.0
+
+    assert imax <= 1.0,\
+           "imax = %.3f : Using wrong version of skimage?" % imax
+
+    img_resized /= imax
+    img_resized = np.clip( img_resized, 0.0, 1.0 )
+
+    class_ = int( fn_pieces[1] )
+
+    return img_resized, class_
+
+
 
 def save_sklearn_model( model_obj, model_name, logl=100 ) :
     """save a sklearn model to models/..."""
@@ -215,7 +234,8 @@ def normalize_imgs( imgs_4d ) :
     std  = imgs_4d.std( axis=(1,2,3), keepdims=True )
 
     return (imgs_4d - mean)/ std
-def tf_evaluate(x_data0, y_data, batch_size, return_inferred=False):
+
+def tf_evaluate(x_data, y_data, batch_size, return_inferred=False):
     """Evaluate accuracy in tf.session"""
     import tensorflow as tf
     #%%
@@ -223,9 +243,9 @@ def tf_evaluate(x_data0, y_data, batch_size, return_inferred=False):
     target    = tf_node( "target:0" )
     accu      = tf_node( "accu:0" )
     #%%
-    num_examples = len( x_data0 )
+    num_examples = len( x_data )
 
-    x_data = normalize_imgs( x_data0 )
+    x_data = normalize_imgs( x_data )
     total_accuracy = 0
     inferred = []
     sess = tf.get_default_session()
