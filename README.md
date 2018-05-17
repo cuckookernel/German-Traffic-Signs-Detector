@@ -9,6 +9,14 @@ This repository includes the following parts:
     1. **infer**: actually opens windows for each image in a directory (this functionality, depends on the pyglet python library for the GUI functionality) 
     2. **train**:  trains a model given a model name and an images directory. The hyperparameters and other information necessary for the model must be specified in the  `MODEL_TRAITS` dictionary defined in the `model_traits.py`
     3. **test**: tests a model given its name and an images directory. As for train, the model parameters have to be defined in `model_traits.py`, plus the model has to be saved under directory `models/<model_name>/saved`. 
-    
- 2. **train_test.py** Actually implements `run_train`, `run_test`, and `run_infer` functions. 
-	
+ 
+ 2. **download.py** Implements the download subcommand
+ 
+ 4. **train_test.py** Actually implements `run_train`, `run_test`, and `run_infer` functions. 
+ 
+ 4. **skl_models.py** Contains code for training and testing LogisticRegression through scikit-learn
+ 
+ 5. **tf_lenet.py**: Has the code for training and testing tensorflow (tf) version of LeNet, included the network construction.
+ 
+ 6. **train_utils.py** Contains some common low-level utilities used through out. 
+ 
