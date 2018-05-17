@@ -17,200 +17,24 @@ log = LOGGER.log #pylint: disable=C0103
 
 def train_lenet( model_traits, data, logl=0, save_model=True ):
     """Train a lenet type NN for image classification"""
-    return train_tf( model_traits, data, 
-                     build_graph=build_lenet_graph, 
-                     logl=logl, 
-                     save_model=save_model ) 
-    
+    return tu.train_tf( model_traits, data,
+                        build_graph=build_lenet_graph,
+                        logl=logl,
+                        save_model=save_model )
+
 
 def test_lenet(  model_traits, data, return_inferred=False, logl=0 ):
     """Test a LeNet type NN for image classification"""
-    return test_tf( model_traits, data, 
-                     build_graph=build_lenet_graph, 
+    return tu.test_tf( model_traits, data,
+                     build_graph=build_lenet_graph,
                      return_inferred=return_inferred,
-                     logl=logl ) 
-    
-    
-def train_log_reg( model_traits, data, logl=0, save_model=True ):
-    """Train a lenet type NN for image classification"""
-    return train_tf( model_traits, data, 
-                     build_graph=build_log_reg, 
-                     logl=logl, 
-                     save_model=save_model ) 
-
-def train_tf( model_traits, data, build_graph, logl=0, save_model=True ) :
-    """Generic function for traing a tf-based model"""
-
-    log( logl, "train_lenet : importing tensorflow" )
-    import tensorflow as tf
-
-    #%%
-    batch_size = model_traits["batch_size"]
-    epochs     = model_traits["epochs"]
-
-    build_graph( model_traits, num_classes=42, mode='train')
-    #%%
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-
-        log( logl, "Training...\n")
-
-        valid_accu_log = []
-        train_accu_log = []
-
-        for i in range(epochs):
-            # X_train, y_train = shuffle(X_train, y_train)
-
-            valid_accu, train_accu = run_one_epoch( sess, batch_size, data )
-            valid_accu_log.append( valid_accu )
-            train_accu_log.append( train_accu )
-
-            log( logl, "EPOCH %d: train accuracy = %.4f validation Accuracy = %.4f",
-                 i+1,  train_accu, valid_accu)
-
-        if save_model :
-            tu.save_tf_model( sess, model_traits["model_name"], logl=logl )
-
-    return { "accuracy" : train_accu_log[-1] }
-
-
-def test_tf( model_traits, data, build_graph, return_inferred=False, logl=0 ):
-    """Generic function for testing a tf-based model"""
-
-    log(logl, "test_lenet : importing tensorflow" )
-    import tensorflow as tf
-
-    batch_size = model_traits["batch_size"]
-
-    build_graph( model_traits, num_classes=42, mode='eval' )
-
-    saver = tf.train.Saver()
-    with tf.Session() as sess:
-        #sess.run(tf.global_variables_initializer())
-
-        log( logl, "Testing...\n")
-        saver.restore(sess, tu.get_save_dir(model_traits["model_name"],
-                                            create=False) )
-
-        result = tf_evaluate( data["test_4d"], data["test_gt"], batch_size,
-                              return_inferred=return_inferred )
-
-    return result
-
-def run_one_epoch( sess, batch_size, data) :
-    """ run one epoch of training """
-
-    #%%
-    images_in = tf_node("images_in:0")
-    target    = tf_node("target:0")
-    train_op  = tf_op("train_op")
-    #%%
-    train_x = normalize_imgs( data["train_4d"] )
-    train_y = data["train_gt"]
-
-    do_valid = "test_4d" in data
-    #print( "do_valid", do_valid, list(data.keys()) )
-
-    for offset in range(0, len(train_x), batch_size):
-        end = offset + batch_size
-        batch_x, batch_y = train_x[offset:end], train_y[offset:end]
-
-        sess.run( train_op, feed_dict={ images_in: batch_x,
-                                        target   : batch_y})
-
-    if do_valid :
-        valid_accu = tf_evaluate( data["test_4d"], data["test_gt"], batch_size)
-    else :
-        valid_accu = float("nan")
-
-    train_accu = tf_evaluate( train_x, train_y, batch_size )
-
-    return valid_accu, train_accu
-
-def tf_node(name) :
-    """Get a node (tensor) in the graph by name.
-    The name is usually <name>:<idx>"""
-    import tensorflow as tf
-    return tf.get_default_graph().get_tensor_by_name( name )
-
-def tf_op(name) :
-    """Get an op (operation) in the graph by name.
-    The name is usually <name>:<idx>"""
-
-    import tensorflow as tf
-    return tf.get_default_graph().get_operation_by_name( name )
-
-
-def build_log_reg( model_traits, num_classes, mode ) :
-    """Builds LeNet Neural network"""
-    #%%
-    import tensorflow as tf
-    
-    #%%
-    #params = model_traits.copy()
-    params =  {"mean" :0.0,
-                    "sigma" : 0.1,
-                    "num_classes" : num_classes,
-                    "mode" : mode }
-
-    tf.reset_default_graph()
-    img_width, img_height = model_traits["target_size"]
-    total_dim = img_width * img_height
-    
-    gray_scale_flat = tf_log_reg_layer0( img_width, img_height )
-    logits = tf_log_reg_layer1(tf,  gray_scale_flat, total_dim, params)
-    tf_log_reg_final( logits )
-    
-    
-def tf_log_reg_layer0( tf, img_width, img_height ) : 
-    #%%
-    from tensorflow.contrib.layers import flatten
-    images_in = tf.placeholder( dtype=tf.float32,
-                                shape=(None, img_width, img_height, 3),
-                                name="images_in" )
-        
-    gray_scale = tf.reduce_mean( images_in, axis = 3, keepdims=True )
-    
-    gray_scale_flat = flatten( gray_scale )
-    #%%
-    
-    return gray_scale_flat
-    
-def tf_log_reg_layer1( tf, gray_scale_flat,  total_dim,params ) :
-
-    num_classes=params["num_classes"]
-    
-    W = tf.Variable(tf.truncated_normal(shape = (total_dim, num_classes),
-                                        mean = params["mean"],
-                                        stddev = params["sigma"]))
-    b = tf.Variable(tf.zeros(num_classes))
-
-    logits = tf.matmul( gray_scale_flat, W ) + b 
-    
-    return logits
-       
-def tf_log_reg_final( tf, logits, params ) :
-    #%%
-    target = tf.placeholder( tf.int32, (None),  name="target" )
-
-    one_hot_y = tf.one_hot(target, params["num_classes"])
-    cross_ent = tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits,
-                                                           labels=tf.stop_gradient(one_hot_y))
-
-    compute_accuracy( tf, cross_ent, one_hot_y, logits, params )
-    #%%
-    
-def test_build_log_reg() :
-    #%%
-    from  model_traits import MODEL_TRAITS    
-    
-    #%%
+                     logl=logl )
 
 def build_lenet_graph( model_traits, num_classes, mode ) :
     """Builds LeNet Neural network"""
 
     import tensorflow as tf
-    
+
     params = model_traits.copy()
     params.update( {"mean" :0.0,
                     "sigma" : 0.1,
@@ -238,7 +62,8 @@ def build_lenet_graph( model_traits, num_classes, mode ) :
         logits, cross_entropy = fc3_orig( tf, fc2, one_hot_y, params)
     else :
         raise NotImplementedError("invalid version: " +  model_traits["net_version"])
-    compute_accuracy( tf, cross_entropy, one_hot_y, logits, params )
+
+    tu.compute_accuracy( tf, cross_entropy, one_hot_y, logits, params )
 
 
 def layer_c1( tf, images_in, params ) : #pylint: disable=C0103
@@ -373,45 +198,6 @@ def fc3_v1( tf, fc2, one_hot_y, params ) : #pylint: disable=C0103
 
     return logits, cross_ent
 
-def compute_accuracy( tf, cross_entropy, one_hot_y, logits, params ) : #pylint: disable=C0103
-    """Accuracy"""
-
-    loss_operation = tf.reduce_mean(cross_entropy)
-    optimizer = tf.train.AdamOptimizer(learning_rate = params["learning_rate"])
-    optimizer.minimize( loss_operation, name="train_op" )
-
-    correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(one_hot_y, 1))
-    tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accu" )
-
-def tf_evaluate(x_data0, y_data, batch_size, return_inferred=False):
-    """Evaluate accuracy in tf.session"""
-    import tensorflow as tf
-    #%%
-    images_in = tf_node( "images_in:0" )
-    target    = tf_node( "target:0" )
-    accu      = tf_node( "accu:0" )
-    #%%
-    num_examples = len( x_data0 )
-
-    x_data = normalize_imgs( x_data0 )
-    total_accuracy = 0
-    inferred = []
-    sess = tf.get_default_session()
-
-    for offset in range(0, num_examples, batch_size):
-
-        batch_x = x_data[offset:offset + batch_size]
-        batch_y = y_data[offset:offset + batch_size]
-
-        accuracy, target_v = sess.run( [accu, target],
-                                       feed_dict={ images_in : batch_x,
-                                                   target    : batch_y } )
-        total_accuracy += (accuracy * len(batch_x))
-        inferred += list( target_v )
-
-    return ( total_accuracy / num_examples if not return_inferred
-             else inferred )
-
 def testing() :
     """Quick interctive tests"""
     #%%
@@ -441,9 +227,3 @@ def testing() :
     #%%
     return   train_results
 
-def normalize_imgs( imgs_4d ) :
-    """Substract mean and divide by std for each image"""
-    mean = imgs_4d.mean( axis=(1,2,3), keepdims=True )
-    std  = imgs_4d.std( axis=(1,2,3), keepdims=True )
-
-    return (imgs_4d - mean)/ std

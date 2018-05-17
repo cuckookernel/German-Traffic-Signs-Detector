@@ -107,6 +107,144 @@ def load_sklearn_model( model_name, logl=100 ) :
     return model
 
 
+def train_tf( model_traits, data, build_graph, logl=0, save_model=True ) :
+    """Generic function for traing a tf-based model"""
+
+    log( logl, "train_lenet : importing tensorflow" )
+    import tensorflow as tf
+
+    #%%
+    batch_size = model_traits["batch_size"]
+    epochs     = model_traits["epochs"]
+
+    build_graph( model_traits, num_classes=42, mode='train')
+    #%%
+    with tf.Session() as sess:
+        sess.run(tf.global_variables_initializer())
+
+        log( logl, "Training...\n")
+
+        valid_accu_log = []
+        train_accu_log = []
+
+        for i in range(epochs):
+            # X_train, y_train = shuffle(X_train, y_train)
+
+            valid_accu, train_accu = run_one_epoch( sess, batch_size, data )
+            valid_accu_log.append( valid_accu )
+            train_accu_log.append( train_accu )
+
+            log( logl, "EPOCH %d: train accuracy = %.4f validation Accuracy = %.4f",
+                 i+1,  train_accu, valid_accu)
+
+        if save_model :
+            save_tf_model( sess, model_traits["model_name"], logl=logl )
+
+    return { "accuracy" : train_accu_log[-1] }
+
+
+def test_tf( model_traits, data, build_graph, return_inferred=False, logl=0 ):
+    """Generic function for testing a tf-based model"""
+
+    log(logl, "test_lenet : importing tensorflow" )
+    import tensorflow as tf
+
+    batch_size = model_traits["batch_size"]
+
+    build_graph( model_traits, num_classes=42, mode='eval' )
+
+    saver = tf.train.Saver()
+    with tf.Session() as sess:
+        #sess.run(tf.global_variables_initializer())
+
+        log( logl, "Testing...\n")
+        saver.restore(sess, get_save_dir(model_traits["model_name"],
+                                         create=False) )
+
+        result = tf_evaluate( data["test_4d"], data["test_gt"], batch_size,
+                              return_inferred=return_inferred )
+
+    return result
+
+def run_one_epoch( sess, batch_size, data) :
+    """ run one epoch of training """
+
+    #%%
+    images_in = tf_node("images_in:0")
+    target    = tf_node("target:0")
+    train_op  = tf_op("train_op")
+    #%%
+    train_x = normalize_imgs( data["train_4d"] )
+    train_y = data["train_gt"]
+
+    do_valid = "test_4d" in data
+    #print( "do_valid", do_valid, list(data.keys()) )
+
+    for offset in range(0, len(train_x), batch_size):
+        end = offset + batch_size
+        batch_x, batch_y = train_x[offset:end], train_y[offset:end]
+
+        sess.run( train_op, feed_dict={ images_in: batch_x,
+                                        target   : batch_y})
+
+    if do_valid :
+        valid_accu = tf_evaluate( data["test_4d"], data["test_gt"], batch_size)
+    else :
+        valid_accu = float("nan")
+
+    train_accu = tf_evaluate( train_x, train_y, batch_size )
+
+    return valid_accu, train_accu
+
+def tf_node(name) :
+    """Get a node (tensor) in the graph by name.
+    The name is usually <name>:<idx>"""
+    import tensorflow as tf
+    return tf.get_default_graph().get_tensor_by_name( name )
+
+def tf_op(name) :
+    """Get an op (operation) in the graph by name.
+    The name is usually <name>:<idx>"""
+
+    import tensorflow as tf
+    return tf.get_default_graph().get_operation_by_name( name )
+
+def normalize_imgs( imgs_4d ) :
+    """Substract mean and divide by std for each image"""
+    mean = imgs_4d.mean( axis=(1,2,3), keepdims=True )
+    std  = imgs_4d.std( axis=(1,2,3), keepdims=True )
+
+    return (imgs_4d - mean)/ std
+def tf_evaluate(x_data0, y_data, batch_size, return_inferred=False):
+    """Evaluate accuracy in tf.session"""
+    import tensorflow as tf
+    #%%
+    images_in = tf_node( "images_in:0" )
+    target    = tf_node( "target:0" )
+    accu      = tf_node( "accu:0" )
+    #%%
+    num_examples = len( x_data0 )
+
+    x_data = normalize_imgs( x_data0 )
+    total_accuracy = 0
+    inferred = []
+    sess = tf.get_default_session()
+
+    for offset in range(0, num_examples, batch_size):
+
+        batch_x = x_data[offset:offset + batch_size]
+        batch_y = y_data[offset:offset + batch_size]
+
+        accuracy, target_v = sess.run( [accu, target],
+                                       feed_dict={ images_in : batch_x,
+                                                   target    : batch_y } )
+        total_accuracy += (accuracy * len(batch_x))
+        inferred += list( target_v )
+
+    return ( total_accuracy / num_examples if not return_inferred
+             else inferred )
+
+
 def save_tf_model( sess, model_name, logl=100 ) :
     """save a tensorflow model to models/..."""
     import tensorflow as tf
@@ -130,3 +268,13 @@ def get_save_dir( model_name, create=True) :
             assert False, "Path doesn't exist: " + saved_dir
 
     return saved_dir
+
+def compute_accuracy( tf, cross_entropy, one_hot_y, logits, params ) : #pylint: disable=C0103
+    """Accuracy"""
+
+    loss_operation = tf.reduce_mean(cross_entropy)
+    optimizer = tf.train.AdamOptimizer(learning_rate = params["learning_rate"])
+    optimizer.minimize( loss_operation, name="train_op" )
+
+    correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(one_hot_y, 1))
+    tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name="accu" )
