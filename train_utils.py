@@ -49,6 +49,9 @@ def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
     resize = skimage.transform.resize
 
     for i, img_fn in enumerate( os.listdir( images_dir ) ) :
+        if img_fn.startswith( '.') :
+            continue
+
         if i % 20 == 0 and verbose > 0 :
             print( "resizing img %i" % i )
 
