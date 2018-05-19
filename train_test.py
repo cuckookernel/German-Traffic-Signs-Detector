@@ -77,10 +77,12 @@ def run_infer( model_name, images_dir, logl=100 ) :
     data = { "test_4d" : test_4d, "test_gt" : test_gt }
 
     model_traits = MODEL_TRAITS[model_name]
-    test_fun = model_traits["test_fun"]
+
+    tt_cls = model_traits["trainer_tester_class"]
+    trainer_tester = tt_cls( model_traits )
 
     #model_obj = tu.load_model(model_name, model_type)
-    infers = test_fun( model_traits, data, logl=logl-1, return_inferred=True)
+    infers = trainer_tester.test( data, logl=logl-1, return_inferred=True)
 
     show_infer( image_paths, infers )
     #%%
