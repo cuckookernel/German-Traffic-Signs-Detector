@@ -26,8 +26,6 @@ def run_train( model_name, images_dir, valid_images_dir=None, logl=100) :
 
     log(logl, "train_4d has shape = %s", (train_4d.shape,) )
 
-
-    train_fun  = model_traits["train_fun"]
     data = { "train_4d" : train_4d, "train_gt" : train_gt }
 
     if valid_images_dir is not None :
@@ -36,7 +34,9 @@ def run_train( model_name, images_dir, valid_images_dir=None, logl=100) :
         data["test_4d"] = test_4d
         data["test_gt"] = test_gt
 
-    train_res = train_fun( model_traits, data, logl=logl -1 )
+    tt_cls = model_traits["trainer_tester_class"]
+    trainer_tester = tt_cls( model_traits )
+    train_res = trainer_tester.train( data, logl=logl -1 )
 
     print( train_res["accuracy"] )
     #%%
@@ -53,10 +53,11 @@ def run_test( model_name, images_dir, logl=100 ) :
     data = { "test_4d" : test_4d, "test_gt" : test_gt }
 
     model_traits = MODEL_TRAITS[model_name]
-    test_fun = model_traits["test_fun"]
 
-    #model_obj = tu.load_model(model_name, model_type)
-    accu = test_fun( model_traits, data, logl=logl-1 )
+    tt_cls = model_traits["trainer_tester_class"]
+    trainer_tester = tt_cls( model_traits )
+
+    accu = trainer_tester.test( data, logl=logl-1 )
 
     print( accu )
     #%%
@@ -87,12 +88,14 @@ def run_infer( model_name, images_dir, logl=100 ) :
 def show_infer( image_paths, infers ) :
     """Show images on image_paths, each together with its inferred label"""
     import pyglet
+
     def show_image( wname, image_path, label ) :
         """construct a window with an image and a label and return it"""
         image  = pyglet.image.load( image_path )
 
         window = pyglet.window.Window( width=image.width,
                                        height=image.height + 30 )
+        #pylint: disable=W0612
         label  = pyglet.text.Label( label,
                                     font_name='Arial',
                                     #color='black',
@@ -100,7 +103,7 @@ def show_infer( image_paths, infers ) :
                                     x=0, y=window.height,
                                     anchor_x='left', anchor_y='top')
 
-        @window.event #pylint: disable=W0612
+        @window.event
         def on_draw() :
             """callback for window event"""
             print("drawing window:" + wname)

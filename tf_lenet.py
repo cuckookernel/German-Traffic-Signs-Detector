@@ -15,62 +15,68 @@ logging.basicConfig( level = 2 )
 LOGGER = logging.getLogger( __name__ )
 log = LOGGER.log #pylint: disable=C0103
 
-def train_lenet( model_traits, data, logl=0, save_model=True ):
-    """Train a lenet type NN for image classification"""
-    return tu.train_tf( model_traits, data,
-                        build_graph=build_lenet_graph,
-                        logl=logl,
-                        save_model=save_model )
+
+class LenetTrainerTester( tu.TrainerTester ) :
+    """Class for training and testing a Lenet model constructed with tensorflow"""
+    def train( self, data, logl=0, save_model=True ):
+        """Train a lenet type NN for image classification"""
+        return tu.train_tf( self.model_traits, data,
+                            build_graph=self.build_lenet_graph,
+                            logl=logl,
+                            save_model=save_model )
 
 
-def test_lenet(  model_traits, data, return_inferred=False, logl=0 ):
-    """Test a LeNet type NN for image classification"""
-    return tu.test_tf( model_traits, data,
-                       build_graph=build_lenet_graph,
-                       return_inferred=return_inferred,
-                       logl=logl )
+    def test(  self, data, return_inferred=False, logl=0 ):
+        """Test a LeNet type NN for image classification"""
+        return tu.test_tf( self.model_traits, data,
+                           build_graph=self.build_lenet_graph,
+                           return_inferred=return_inferred,
+                           logl=logl )
 
-def build_lenet_graph( model_traits, num_classes, mode ) :
-    """Builds LeNet Neural network"""
-    #pylint: disable=R014
 
-    import tensorflow as tf
+    def build_lenet_graph( self, num_classes, mode ) :
+        """Builds LeNet Neural network"""
+        #pylint: disable=R0914
 
-    params = model_traits.copy()
-    params.update( {"mean" :0.0,
-                    "sigma" : 0.1,
-                    "num_classes" : num_classes,
-                    "mode" : mode })
+        import tensorflow as tf
 
-    tf.reset_default_graph()
-    img_width, img_height = model_traits["target_size"]
+        m_traits = self.model_traits
 
-    images_in = tf.placeholder( dtype=tf.float32,
-                                shape=(None, img_width, img_height, 3),
-                                name="images_in" )
+        params = m_traits.copy()
+        params.update( {"mean" :0.0,
+                        "sigma" : 0.1,
+                        "num_classes" : num_classes,
+                        "mode" : mode })
 
-    if model_traits["net_version"] == "orig" :
-        non_linear_fun = lambda tensor : 1.7159 * tf.tanh( tensor )
-        fc3_fun = fc3_orig
-    elif  model_traits["net_version"] == "v1" :
-        non_linear_fun = tf.nn.relu
-        fc3_fun = fc3_v1
-    else:
-        raise NotImplementedError("invalid version: %s" % model_traits["net_version"])
+        tf.reset_default_graph()
+        img_width, img_height = m_traits["target_size"]
 
-    pool_1 = layer_c1( tf, images_in, non_linear_fun, params )
+        images_in = tf.placeholder( dtype=tf.float32,
+                                    shape=(None, img_width, img_height, 3),
+                                    name="images_in" )
 
-    pool_2 = layer_c2( tf, pool_1, non_linear_fun, params )
+        if m_traits["net_version"] == "orig" :
+            non_linear_fun = lambda tensor : 1.7159 * tf.tanh( tensor )
+            fc3_fun = fc3_orig
+        elif  m_traits["net_version"] == "v1" :
+            non_linear_fun = tf.nn.relu
+            fc3_fun = fc3_v1
+        else:
+            raise NotImplementedError("invalid version: %s" % m_traits["net_version"])
 
-    fc2 = fully_connected( tf, pool_2, non_linear_fun, params )
+        pool_1 = layer_c1( tf, images_in, non_linear_fun, params )
 
-    target = tf.placeholder( tf.int32, (None), name="target" )
+        pool_2 = layer_c2( tf, pool_1, non_linear_fun, params )
 
-    one_hot_y = tf.stop_gradient( tf.one_hot(target, num_classes) )
+        fc2 = fully_connected( tf, pool_2, non_linear_fun, params )
 
-    logits, cross_entropy = fc3_fun( tf, fc2, one_hot_y, params)
+        target = tf.placeholder( tf.int32, (None), name="target" )
 
-    tu.compute_accuracy( tf, cross_entropy, one_hot_y, logits, params )
+        one_hot_y = tf.stop_gradient( tf.one_hot(target, num_classes) )
+
+        logits, cross_entropy = fc3_fun( tf, fc2, one_hot_y, params)
+
+        tu.compute_accuracy( tf, cross_entropy, one_hot_y, logits, params )
 
 
 def layer_c1( tf, images_in, non_linear_fun, params ) : #pylint: disable=C0103
@@ -211,7 +217,9 @@ def testing() :
     data = { "train_4d" : train_4d,  "train_gt" : train_gt,
              "test_4d" : test_4d, "test_gt" : test_gt}
 
-    train_results = train_lenet( MODEL_TRAITS["model2"], data, logl = 1 )
+    lenet_tt = LenetTrainerTester( MODEL_TRAITS["model3"] )
+
+    train_results = lenet_tt.train( data, logl = 1 )
     #%%
     model_traits = MODEL_TRAITS["model2"]
     build_lenet_graph( model_traits, num_classes=42, mode='train' )

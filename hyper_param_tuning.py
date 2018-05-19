@@ -13,7 +13,6 @@ import json
 import numpy as np
 
 import train_utils as tu
-from tf_lenet import train_lenet
 from model_traits import MODEL_TRAITS
 
 def run_experiments() :
@@ -24,14 +23,12 @@ def run_experiments() :
         "batch_size" : [ 30 , 60, 100  ],
         "learning_rate" : [ 0.0002, 0.0003, 0.0005 ],
         "drop_out_rate" : [  0.2, 0.25, 0.3 ],
-
         "rescale_mode" : [ "max_q" , "max", "" ]
     }
 
     model_traits = MODEL_TRAITS["model2"].copy()
-    del model_traits["train_fun"]
-    del model_traits["test_fun"]
-
+    tt_obj = model_traits["trainer_tester_class"]( model_traits )
+    del model_traits["trainer_tester_class"]
 
     cnt = 0
     for batchs, lrate, do_rate, resc_mode in product( g_specs["batch_size"],
@@ -39,33 +36,24 @@ def run_experiments() :
                                                       g_specs["drop_out_rate"],
                                                       g_specs["rescale_mode"] ) :
 
-        model_traits.update( {"batch_size" : batchs,
-                              "learning_rate" : lrate,
-                              "rescale_mode" :  resc_mode,
-                              "drop_out_rate" : do_rate })
+        tt_obj.model_traits.update( {"batch_size" : batchs,
+                                     "learning_rate" : lrate,
+                                     "rescale_mode" :  resc_mode,
+                                     "drop_out_rate" : do_rate } )
 
         train_4d, train_gt = tu.make_4d_arrays( images_dir="images/train",
-                                                target_size=target_size)
-
-        train_mean = train_4d.mean( axis=(1,2,3), keepdims=True )
-        train_std  = train_4d.std( axis=(1,2,3), keepdims=True )
-        train_x = (train_4d - train_mean)/ train_std
-
+                                                target_size=target_size )
 
         test_4d, test_gt = tu.make_4d_arrays( images_dir="images/test",
-                                              target_size=target_size)
+                                              target_size=target_size )
 
-        test_mean = test_4d.mean( axis=(1,2,3), keepdims=True )
-        test_std  = test_4d.std( axis=(1,2,3), keepdims=True )
-        test_x = (test_4d - test_mean)/ test_std
+        data = {"train_4d" : train_4d,
+                "test_4d"  : test_4d,
+                "train_y"  : train_gt,
+                "test_y"   : test_gt}
 
-        data = {"train_x" :train_x,
-                "test_x"  :test_x,
-                "train_y" : train_gt,
-                "test_y"  : test_gt}
-
-        valid_accu_log, train_accu_log = train_lenet( model_traits, data,
-                                                      logl=100 )
+        valid_accu_log, train_accu_log = tt_obj.train( model_traits, data,
+                                                       logl=100 )
         idx_v = int(np.argmax( valid_accu_log))
         idx_t = int(np.argmax( train_accu_log))
 
@@ -75,8 +63,7 @@ def run_experiments() :
                              "best_valid_at" : idx_v,
                              "train_at_best_valid" : train_accu_log[idx_v],
                              "best_train" : max(train_accu_log),
-                             "best_train_at":  idx_t
-                            })
+                             "best_train_at":  idx_t  })
 
         #print(cnt, pformat(model_traits) )
         print( "%d : best_train = %.4f, best_valid = %.4f" % \

@@ -17,11 +17,29 @@ from sklearn.externals import joblib
 
 log = logging.getLogger( __name__ ).log #pylint: disable=C0103
 
+class TrainerTester :
+    """Abstract class for doing training, testing and saving a model """
+    def __init__(self, model_traits ) :
+        """the constructor"""
+        self.model_traits = model_traits
+
+    def train( self, data, logl=0, save_model=True ) :
+        """train a model"""
+        raise NotImplementedError("Concrete subclasses need to implement this!")
+
+    def test( self, data, return_inferred=False, logl=0 ) :
+        """Test model"""
+        raise NotImplementedError("Concrete subclasses need to implement this!")
+
+
 def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
                     order=3, verbose=0, **kwargs ) :
     """This function does the following:
 
     1. Reads images from directory
+       (IMPORTANT: images are assumed to be one level deep,
+                   i.e the directory structure is flat.
+        Files whoe names start with '.' are ignored)
     2. resizes each to target_size
     3. optionally rescales them
     4. extracts the ground truth label from the filename for each of them
@@ -46,7 +64,6 @@ def make_4d_arrays( images_dir, target_size=(32,32), rescale_mode='max',
 
     arr_3d_list = []
     gt_list = []
-
 
     for i, img_fn in enumerate( os.listdir( images_dir ) ) :
 
@@ -106,8 +123,6 @@ def resize_one( image_path, rescale_mode, target_size, order, **kwargs ) :
 
     return img_resized, class_
 
-
-
 def save_sklearn_model( model_obj, model_name, logl=100 ) :
     """save a sklearn model to models/..."""
     model_path = get_save_dir( model_name ) + "%s.pkl" % model_name
@@ -126,7 +141,8 @@ def load_sklearn_model( model_name, logl=100 ) :
     return model
 
 
-def train_tf( model_traits, data, build_graph, logl=0, save_model=True ) :
+def train_tf( model_traits, data, build_graph, logl=0,
+              save_model=True, log_every=5 ) :
     """Generic function for traing a tf-based model"""
 
     log( logl, "train_lenet : importing tensorflow" )
@@ -136,7 +152,7 @@ def train_tf( model_traits, data, build_graph, logl=0, save_model=True ) :
     batch_size = model_traits["batch_size"]
     epochs     = model_traits["epochs"]
 
-    build_graph( model_traits, num_classes=42, mode='train')
+    build_graph( num_classes=42, mode='train')
     #%%
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -153,8 +169,9 @@ def train_tf( model_traits, data, build_graph, logl=0, save_model=True ) :
             valid_accu_log.append( valid_accu )
             train_accu_log.append( train_accu )
 
-            log( logl, "EPOCH %d: train accuracy = %.4f validation Accuracy = %.4f",
-                 i+1,  train_accu, valid_accu)
+            if i % log_every== 0 :
+                log( logl, "EPOCH %d: train accuracy = %.4f validation Accuracy = %.4f",
+                     i+1,  train_accu, valid_accu)
 
         if save_model :
             save_tf_model( sess, model_traits["model_name"], logl=logl )
@@ -170,7 +187,7 @@ def test_tf( model_traits, data, build_graph, return_inferred=False, logl=0 ):
 
     batch_size = model_traits["batch_size"]
 
-    build_graph( model_traits, num_classes=42, mode='eval' )
+    build_graph( num_classes=42, mode='eval' )
 
     saver = tf.train.Saver()
     with tf.Session() as sess:
