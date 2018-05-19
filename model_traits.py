@@ -15,6 +15,7 @@ import tf_lenet
 MODEL_TRAITS = [
 
     { "model_name" : "model1",
+      "target_size" : (32,32),
       "trainer_tester_class" : skl_logistic.LRTrainerTester },
 
     { "model_name" : "model2",
